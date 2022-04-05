@@ -30,9 +30,10 @@ with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
         print(f"Connected by {addr}")
         while True:
             data=conn.recv(1024)
+            newData=data[::-1]
             if not data:
                 break
-            conn.sendall(data)
+            conn.sendall(newData)
 
 #2. Set up TCP Socket
 #3. Set up message queues
