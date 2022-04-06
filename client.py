@@ -17,7 +17,10 @@ PORT=int(sys.argv[2]) #Get port from command line
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
-    s.sendall(b"Hello, world")
-    data = s.recv(1024)
-
-print(f"Received {data!r}")
+    exitTok="EXIT"
+    for line in sys.stdin:
+        if exitTok == line.rstrip():
+            break
+        s.sendall(line.encode())
+        data = s.recv(1024)
+        print(f"Received {data!r}")
