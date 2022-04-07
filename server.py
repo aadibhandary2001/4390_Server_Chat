@@ -12,30 +12,38 @@
 #File Resources and Imports Below
 import socket
 import sys
+import threading
 
-#1. Set up welcome socket
+#Utility Functions
+def handleClient(newCon,newAddr): #Handle client. Threadded function for concurrent client handling
+    with newCon:
+        print(f"Connected by {newAddr}") #State status
+        while True: #Recieve bytes until client exits
+            data=newCon.recv(1024) #input stream
+            print(newAddr,"Says: ",data) #print client input
+            newData=data[::-1]  #reverse client input
+            if not data: #if exit, we break
+                break
+            newCon.sendall(newData)#else, we return values to the client
+
+#Code Below Sets up welcome socket
 HostName=socket.gethostname() #Obtain Host Name
 HOST=socket.gethostbyname(HostName) #Obtain Host Address
 PORT=int(sys.argv[1]) #Obtain port from first argument in command line
 
-print(HostName)
-print(HOST)
-print(PORT)
+print(HostName) #Print Host Name of Server
+print(HOST) #Print Host Address of Server
+print(PORT) #Print Port in use
 
-with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
+    clients=[]
     s.listen()
-    conn, addr= s.accept()
-    with conn:
-        print(f"Connected by {addr}")
-        while True:
-            data=conn.recv(1024)
-            print(data)
-            newData=data[::-1]
-            if not data:
-                break
-            conn.sendall(newData)
+    while True:
+            conn, addr= s.accept() #accept new clients and create threads for each
+            t=threading.Thread(target=handleClient,args=(conn,addr,)) #initialize thread
+            t.start() #start thread
+            clients.append(t) #add thread to thread pool
 
-#2. Set up TCP Socket
 #3. Set up message queues
 #4. Start Threads
