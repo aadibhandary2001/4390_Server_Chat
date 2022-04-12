@@ -14,17 +14,22 @@ import socket
 import sys
 import threading
 
+# The code itself works, but it has to have Cryptodome in the same folder as it, and I don't know why.
+import Encryptor
+
+Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
+
 #Utility Functions
 def handleClient(newCon,newAddr): #Handle client. Threadded function for concurrent client handling
     with newCon:
         print(f"Connected by {newAddr}") #State status
         while True: #Recieve bytes until client exits
-            data=newCon.recv(1024) #input stream
-            print(newAddr,"Says: ",data) #print client input
-            newData=data[::-1]  #reverse client input
+            data=Authenticator.decrypt(newCon.recv(1024)) #input stream
             if not data: #if exit, we break
                 break
-            newCon.sendall(newData)#else, we return values to the client
+            print(newAddr,"Says: ",data) #print client input
+            newData=data[::-1]  #reverse client input
+            newCon.sendall(Authenticator.encrypt(newData))#else, we return values to the client
 
 #Code Below Sets up welcome socket
 HostName=socket.gethostname() #Obtain Host Name
