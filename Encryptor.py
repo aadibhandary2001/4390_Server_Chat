@@ -30,20 +30,24 @@ class Cryptographer:
 
     # A method to encrypt a message before sending it.
     def encrypt(self, message):
+        # Attempt to encrypt a message
         try:
             # Turning the message into bytes
             byte_message=bytes(str(message), 'utf-8')
             # Returning the original message, encrypted, as a set of bytes.
             return self.cipher.encrypt(pad(byte_message, AES.block_size))
+        # I have no clue what situation a value error could come up in for this side of encryption
         except ValueError:
             print("Unknown source of ValueError. I am not sure where this could happen.")
 
     # A method to encrypt a received message
     def decrypt(self, message):
+        # Attempt to read decrypted data
         try:
             decrypted_message = unpad(self.cipher.decrypt(message), AES.block_size)
             # Returning the decrypted message directly as a string, while eliminating any New Line characters.
             return decrypted_message.decode().replace('\n', '')
+        # If there was no data to read,it is most likely the TCP connection using this Encryptor has ended.
         except ValueError:
             print("A TCP connection has ended")
 
