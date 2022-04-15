@@ -21,16 +21,36 @@ def hello(s, line):
     s.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
     data = Authenticator.decrypt(s.recv(1024))
     print(f"Received {data!r}")
-    
+
     # Client can log in
-    first_word = data.split()[0]
+    message = data.split()
+    first_word = message[0]
     if first_word == "User_Exists":
+        # Begin the RESPONSE procedure.
+        # Extracting the random bytes from the message.
+        rand = s.recv(1024).decode()
+        # For now at least, the secret keys are passwords input by the users.
         password = input()
-        s.sendall(Authenticator.encrypt(password))
-        
-        data = Authenticator.decrypt(s.recv(1024))
-        print(f"Received {data!r}")
-        
+        # Sending the RES result to compare to the equivalent at the server.
+        s.sendall(Authenticator.encrypt(Encryptor.run_SHA1((password + rand).encode())))
+        challenge_result = Authenticator.decrypt(s.recv(1024))
+        print(f"Received {challenge_result!r}")
+        confirmation = challenge_result.split()
+        print(confirmation)
+        # If the word Successfully is there, it's an AUTH_SUCCESS
+        # If not, then the user was notified of login failure.
+        if confirmation[0] == "Successfully":
+            # Extracting the rand_cookie from the AUTH_SUCCESS
+            rand_cookie = confirmation[len(confirmation) - 1]
+            # Creation of a key using the existing rand and an alternate Hash.
+            key = Encryptor.run_MD5((password + rand).encode())
+            # Creation of a cipher using the new key and the rand_cookie.
+            cipher = Encryptor.Cryptographer(key, rand_cookie.encode())
+            # Running a test of the new cipher.
+            s.sendall(cipher.encrypt("Testing. rand_cookie: " + rand_cookie))
+            test = cipher.decrypt(s.recv(1024))
+            print(f"Test result: {test!r}")
+
     # Client create new account
     else:
         newPassword = input()
