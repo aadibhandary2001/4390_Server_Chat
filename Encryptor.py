@@ -5,7 +5,9 @@
 #   Procedures:
 #       encrypt:        -Take any arbitrary input and return a byte-encrypted version of it
 #       decrypt:        -Take in an encrypted byte input and return a decrypted string version of it
-#
+#       give_random:    -Give a random strange based on Cryptodome's random to be used for generation of active-keys
+#       run_SHA1:       -Take in bytes to run SHA1 on them. Intended to be used for the RES in authentication
+#       run_MD5:        -Take in bytes to run MD5 on them. Intended to be used to generate a new Cryptographer key.
 #############################################################################
 
 # Importations from Cryptodome used for encryption/decryption.
@@ -21,6 +23,21 @@ import hashlib
 # Makes use of the PyCryptodome library to take in any arbitrary key input and valid salt to create its
 # encryption.
 
+# A function to give 8 random bytes (as a string) to be used for challenges or key generation.
+def give_random():
+    return str(get_random_bytes(8))
+
+
+# A function to run SHA1 on a message and return the bytes for challenges
+def run_SHA1(message):
+    temp_hash = hashlib.new('sha1', message)
+    return temp_hash.digest()
+
+
+# A function to run MD5 on a message and return the bytes for key generation.
+def run_MD5(message):
+    temp_hash = hashlib.new('md5', message)
+    return temp_hash.digest()
 
 class Cryptographer:
     def __init__(self, key, salt):

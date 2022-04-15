@@ -36,23 +36,46 @@ def hello(newCon, data):
 
     # Username exists -Changed from usernames to users
     if clientID in users:
-        # Asks for password
+        # Asks for password- Equivalent to CHALLENGE
         greetUser = "User_Exists "
         greetUser += " Username: " + clientID
         greetUser += " Please enter your password: "
+        # Generation of the rand used for XRES
+        rand = Encryptor.give_random()
+        # The sending of the greeting and rand are currently separate for readability.
+        # Changing it to a tuple or something would help.
         newCon.sendall(Authenticator.encrypt(greetUser))
+        newCon.sendall(rand.encode())
 
-        # Get client password
+        Xres = Encryptor.run_SHA1((users[clientID]+rand).encode())
+        print("XRES: " + str(Xres))
+        # Get client RESPONSE
         data = Authenticator.decrypt(newCon.recv(1024))
-        print("Says: ", data)
+        print("Says: "+ data)
         # index = usernames.index(clientID)
 
-        # Correct password
-        if users[clientID] == data:
-            loginSucess = "Sucessfully Logged in"
-            newCon.sendall(Authenticator.encrypt(loginSucess))
+        # Correct password-Equivalent to AUTH_SUCCESS
+        if str(Xres) == data:
+            # A message to inform the client of the fact they logged in right.
+            loginSuccess = "Successfully Logged in "
+            # Creation of the rand_cookie, used as a salt for the new cipher.
+            rand_cookie = Encryptor.give_random()
+            # The rand_cookie is sent with the login success message. Again, need to find a way to
+            # send data we don't want the user to see in a clean way.
+            loginSuccess += rand_cookie
+            newCon.sendall(Authenticator.encrypt(loginSuccess))
+            # Creation of a new key for the new cipher
+            key = Encryptor.run_MD5((users[clientID] + rand).encode())
+            # The new cipher, made using the key and rand_cookie.
+            # In the final version of this, the cipher should be returned, or something similar.
+            cipher = Encryptor.Cryptographer(key, rand_cookie.encode())
+            # Running of a test of the new key.
+            test_message = cipher.decrypt(newCon.recv(1024))
+            print("Says: ", test_message)
+            test_response = test_message[::-1]
+            newCon.sendall(cipher.encrypt(test_response))
 
-        # Wrong password
+        # Wrong password-Equivalent to AUTH_FAIL
         else:
             loginFailure = "Wrong_Password: Please try logging in again"
             newCon.sendall(Authenticator.encrypt(loginFailure))
