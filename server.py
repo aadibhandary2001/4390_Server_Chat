@@ -1,13 +1,17 @@
 ##############################################################################
-#   File:   main.py
+#   File:    server.py
 #   Author(s): Aadi Bhandary (CE)
 #
 #   Prodcedures:
-#       handleWelcome:  -reads from socket and checks subscriber list
-#       handleClient:   -reads user requests and messages
-#       messageSender:  -operates the message send queue. sends to ledger and
+#        handleClient:   -reads user requests and messages
+#        handleWelcome:  -checks client is on subscriber list and authenticates them,
+#                        -or create new client account/subscription
+#        challenge:      -challenges client to authenticate itself
+#        authSuccess:    -notify client that authentication is successful
+#        authFail:       -notify client that authentication has failed
 #
 #############################################################################
+import time # For sleep()
 
 # File Resources and Imports Below
 import socket
@@ -26,80 +30,111 @@ Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 users = {"dababy": "Apple", "pog": "Banana"}
 
 
-# usernames = ["dababy", "pog"]
-# passwords = ["Apple", "Banana"]
+# CHALLENGE (rand) - challenge the client to authenticate itself
+def challenge(newCon, clientID):
+    # Asks for password
+    greetUser = "User_Exists "
+    greetUser += " Username: " + clientID
+    greetUser += " Please enter your password: "
+    
+    # Generation of the rand used for XRES
+    rand = Encryptor.give_random()
+    
+    # The sending of the greeting and rand as a tuple
+    # tupple is serialized as a string and must be deserialize by client
+    greetUser += ", " + rand
+    newCon.sendall(Authenticator.encrypt(greetUser))
+    
+    # rand and client's secretKey used in authentication algorithm A3 to output Xres
+    Xres = Encryptor.run_SHA1((users[clientID]+rand).encode())
+    print("XRES: " + str(Xres))
+    
+    # Returns Xres and rand
+    return Xres, rand
 
-# HELLO (Client-ID-A) Protocal Message
-def hello(newCon, data):
+
+# AUTH_SUCCESS(rand_cookie, port_number)
+# Notify the client authentication is successful
+# Still need to send the new port # for subsequent connection by client?
+def authSuccess(newCon, rand, clientID):
+    # A message to inform the client of the fact they logged in right.
+    auth_Success = "AUTH_SUCCESS "
+    
+    # Creation of the rand_cookie, used as a salt for the new cipher.
+    rand_cookie = Encryptor.give_random()
+    
+    # The rand_cookie is sent with the login success message. Again, need to find a way to
+    # send data we don't want the user to see in a clean way.
+    auth_Success += rand_cookie
+    newCon.sendall(Authenticator.encrypt(auth_Success))
+    
+    # Creation of a new key for the new cipher
+    key = Encryptor.run_MD5((users[clientID] + rand).encode())
+    
+    # The new cipher, made using the key and rand_cookie.
+    # In the final version of this, the cipher should be returned, or something similar.
+    cipher = Encryptor.Cryptographer(key, rand_cookie.encode())
+     
+    # Returns variables for possible later use
+    # Dunno if I should return rand_cookie or key too
+    return cipher
+
+
+# Notify the client authentication has failed
+def authFail(newCon):
+    auth_Fail = "Wrong_Password: Please try logging in again with HELLO Client-ID"
+    newCon.sendall(Authenticator.encrypt(auth_Fail))
+
+
+# Receives client's HELLO (Client-ID-A)
+# Handles client authentication and new clients
+def handleWelcome(newCon, data):
     # Client Username
     clientID = data.split()[1]
-
-    # Username exists -Changed from usernames to users
+    
+    # User exists on list of subscribers
     if clientID in users:
-        # Asks for password- Equivalent to CHALLENGE
-        greetUser = "User_Exists "
-        greetUser += " Username: " + clientID
-        greetUser += " Please enter your password: "
-        # Generation of the rand used for XRES
-        rand = Encryptor.give_random()
-        # The sending of the greeting and rand are currently separate for readability.
-        # Changing it to a tuple or something would help.
-        newCon.sendall(Authenticator.encrypt(greetUser))
-        newCon.sendall(rand.encode())
-
-        Xres = Encryptor.run_SHA1((users[clientID]+rand).encode())
-        print("XRES: " + str(Xres))
+        # Authenticate client
+        Xres, rand = challenge(newCon, clientID)
+        
         # Get client RESPONSE
         data = Authenticator.decrypt(newCon.recv(1024))
         print("Says: "+ data)
-        # index = usernames.index(clientID)
-
+        
         # Correct password-Equivalent to AUTH_SUCCESS
         if str(Xres) == data:
-            # A message to inform the client of the fact they logged in right.
-            loginSuccess = "Successfully Logged in "
-            # Creation of the rand_cookie, used as a salt for the new cipher.
-            rand_cookie = Encryptor.give_random()
-            # The rand_cookie is sent with the login success message. Again, need to find a way to
-            # send data we don't want the user to see in a clean way.
-            loginSuccess += rand_cookie
-            newCon.sendall(Authenticator.encrypt(loginSuccess))
-            # Creation of a new key for the new cipher
-            key = Encryptor.run_MD5((users[clientID] + rand).encode())
-            # The new cipher, made using the key and rand_cookie.
-            # In the final version of this, the cipher should be returned, or something similar.
-            cipher = Encryptor.Cryptographer(key, rand_cookie.encode())
+            cipher = authSuccess(newCon, rand, clientID)
+            
             # Running of a test of the new key.
             test_message = cipher.decrypt(newCon.recv(1024))
             print("Says: ", test_message)
+            
             test_response = test_message[::-1]
             newCon.sendall(cipher.encrypt(test_response))
-
+        
         # Wrong password-Equivalent to AUTH_FAIL
         else:
-            loginFailure = "Wrong_Password: Please try logging in again"
-            newCon.sendall(Authenticator.encrypt(loginFailure))
-
+            authFail(newCon)
+    
     # Username doesn't exist
     else:
-        # Adds clientID to usernames list
-        # usernames.append(clientID)
-
-        # Asks to create password
-        createPasswordMsg = "User_Not_Found"
-        createPasswordMsg += "User '" + clientID + "' is not on the list of subscribers"
+        # Ask to create password (client's secretKey)
+        createPasswordMsg = "User_Not_Found "
+        createPasswordMsg += "User " + clientID + " is not on the list of subscribers"
         createPasswordMsg += "Please create a password for the new user: "
         newCon.sendall(Authenticator.encrypt(createPasswordMsg))
-
-        # place new user password into list
+        
+        # Get client password (client's secretKey)
         data = Authenticator.decrypt(newCon.recv(1024))
         print("Says: ", data)
-        # index = usernames.index(clientID)
-        # passwords.append(data)
+        
+        # Place new user and their password into dictionary users
         users[clientID] = data
-        newUserSucess = "Sucessfully Created Account for User: " + clientID
-        newUserSucess += "Please try logging into your new account to chat"
-        newCon.sendall(Authenticator.encrypt(newUserSucess))
+        
+        # Notify client of successful account creation/subscription
+        newUserSuccess = "Sucessful Account Creation/Subscription for User: " + clientID
+        newUserSuccess += "Please try logging into your new account to chat"
+        newCon.sendall(Authenticator.encrypt(newUserSuccess))
 
 
 # Utility Functions
@@ -116,7 +151,7 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
             # connected client tries to log on by sending "HELLO Client-Username"
             first_word = data.split()[0]
             if first_word == "HELLO":
-                hello(newCon, data)
+                handleWelcome(newCon, data)
             else:
                 newCon.sendall(Authenticator.encrypt(newData))  # else, we return values to the client
 
