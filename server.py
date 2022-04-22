@@ -22,7 +22,7 @@ import threading
 import Encryptor
 
 # Creation of the test Encryptor. All data sent or received passes through this.
-# This should be deleted when the UDP Socket
+# This should be deleted when the UDP Socket is implemented
 Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
 # A test dictionary of usernames and passwords. In the final version, these should be stored in a file between uses.
@@ -41,7 +41,6 @@ def challenge(newCon, clientID):
     # Generation of the rand used for XRES and salt used for the password.
     rand = Encryptor.give_random()
     salt = Encryptor.give_random()
-    print(salt)
 
     # The sending of the greeting and rand as a tuple
     # tupple is serialized as a string and must be deserialize by client
