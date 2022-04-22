@@ -22,6 +22,7 @@ import threading
 import Encryptor
 
 # Creation of the test Encryptor. All data sent or received passes through this.
+# This should be deleted when the UDP Socket
 Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
 # A test dictionary of usernames and passwords. In the final version, these should be stored in a file between uses.
@@ -37,44 +38,47 @@ def challenge(newCon, clientID):
     greetUser += " Username: " + clientID
     greetUser += " Please enter your password: "
     
-    # Generation of the rand used for XRES
+    # Generation of the rand used for XRES and salt used for the password.
     rand = Encryptor.give_random()
-    
+    salt = Encryptor.give_random()
+    print(salt)
+
     # The sending of the greeting and rand as a tuple
     # tupple is serialized as a string and must be deserialize by client
     greetUser += ", " + rand
+    greetUser += ", " + salt
     newCon.sendall(Authenticator.encrypt(greetUser))
     
     # rand and client's secretKey used in authentication algorithm A3 to output Xres
     Xres = Encryptor.run_SHA1((users[clientID]+rand).encode())
     print("XRES: " + str(Xres))
     
-    # Returns Xres and rand
-    return Xres, rand
+    # Returns Xres, rand, and the salt
+    return Xres, rand, salt
 
 
 # AUTH_SUCCESS(rand_cookie, port_number)
 # Notify the client authentication is successful
 # Still need to send the new port # for subsequent connection by client?
-def authSuccess(newCon, rand, clientID):
+def authSuccess(newCon, rand, salt, clientID):
     # A message to inform the client of the fact they logged in right.
     auth_Success = "AUTH_SUCCESS "
     
     # Creation of the rand_cookie, used as a salt for the new cipher.
     rand_cookie = Encryptor.give_random()
     
-    # The rand_cookie is sent with the login success message. Again, need to find a way to
-    # send data we don't want the user to see in a clean way.
-    auth_Success += rand_cookie
-    newCon.sendall(Authenticator.encrypt(auth_Success))
-    
     # Creation of a new key for the new cipher
     key = Encryptor.run_MD5((users[clientID] + rand).encode())
     
     # The new cipher, made using the key and rand_cookie.
     # In the final version of this, the cipher should be returned, or something similar.
-    cipher = Encryptor.Cryptographer(key, rand_cookie.encode())
-     
+    cipher = Encryptor.Cryptographer(key, salt.encode())
+
+    # The rand_cookie is sent with the login success message. Again, need to find a way to
+    # send data we don't want the user to see in a clean way.
+    auth_Success += rand_cookie
+    newCon.sendall(cipher.encrypt(auth_Success))
+
     # Returns variables for possible later use
     # Dunno if I should return rand_cookie or key too
     return cipher
@@ -95,15 +99,15 @@ def handleWelcome(newCon, data):
     # User exists on list of subscribers
     if clientID in users:
         # Authenticate client
-        Xres, rand = challenge(newCon, clientID)
+        Xres, rand, salt = challenge(newCon, clientID)
         
         # Get client RESPONSE
         data = Authenticator.decrypt(newCon.recv(1024))
-        print("Says: "+ data)
+        print("Says: " + data)
         
         # Correct password-Equivalent to AUTH_SUCCESS
         if str(Xres) == data:
-            cipher = authSuccess(newCon, rand, clientID)
+            cipher = authSuccess(newCon, rand, salt, clientID)
             
             # Running of a test of the new key.
             test_message = cipher.decrypt(newCon.recv(1024))
@@ -132,7 +136,7 @@ def handleWelcome(newCon, data):
         users[clientID] = data
         
         # Notify client of successful account creation/subscription
-        newUserSuccess = "Sucessful Account Creation/Subscription for User: " + clientID
+        newUserSuccess = "Successful Account Creation/Subscription for User: " + clientID
         newUserSuccess += "Please try logging into your new account to chat"
         newCon.sendall(Authenticator.encrypt(newUserSuccess))
 
