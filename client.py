@@ -14,10 +14,11 @@ import sys
 import Encryptor
 
 # Creation of the test Encryptor. All data sent or received passes through this.
+# This should be deleted when the UDP Socket is implemented.
 Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
 # Response to the challenge by server for authentication
-def response(s, rand):    
+def response(s, rand, salt):
     # For now at least, the secret keys are passwords input by the users.
     password = input()
     
@@ -25,13 +26,28 @@ def response(s, rand):
     while password == '':
         print("Error: the password can't be empty. \nPlease enter a non empty password:")
         password = input()
-    
+
+
     # Sending the RES result to compare to the equivalent at the server.
-    s.sendall(Authenticator.encrypt(Encryptor.run_SHA1((password + rand).encode())))
-    challenge_result = Authenticator.decrypt(s.recv(1024))
-    print(f"Received {challenge_result!r}")
-    confirmation = challenge_result.split()
-    print(confirmation)
+    RES = Authenticator.encrypt(Encryptor.run_SHA1((password + rand).encode()))
+    s.sendall(RES)
+    # Receiving the result of the login attempt
+    message = s.recv(1024)
+    # Due to Authenticator, this will often post an unwanted "A TCP Connection has ended.
+    challenge_result = Authenticator.decrypt(message)
+    # If the result has Wrong_Password in it as a string, it failed and will print that fact here.
+    # The is not None will be removed when the test Authenticator isn't needed anymore.
+    if challenge_result is not None and challenge_result.find('Wrong_Password') >= 0:
+        print(f"Received {challenge_result!r}")
+        confirmation = challenge_result
+    # Otherwise, it will create a temporary version of the cipher to decrypt the message properly and give confirmation.
+    else:
+        # Temporarily creating the new cipher through the key and the salt to obtain the Auth_Success
+        key = Encryptor.run_MD5((password + rand).encode())
+        cipher = Encryptor.Cryptographer(key, salt.encode())
+        # Creating and printing the confirmation.
+        confirmation = cipher.decrypt(message).split()
+        print(confirmation)
     
     return confirmation, password
 
@@ -49,8 +65,9 @@ def hello(s, line):
     msg_rand_tuple = tuple(map(str, data.split(', ')))
     
     welcomeMsg = msg_rand_tuple[0]
-    if len(msg_rand_tuple) == 2:
+    if len(msg_rand_tuple) == 3:
         rand = msg_rand_tuple[1]
+        salt = msg_rand_tuple[2]
     
     # Print server's welcome message
     print(f"Received {welcomeMsg!r}")
@@ -61,7 +78,7 @@ def hello(s, line):
     # Client is on the list of subscribers
     if first_word == "User_Exists":
         # Respond to server challenge
-        confirmation, password = response(s, rand)
+        confirmation, password = response(s, rand, salt)
     
         # If AUTH_SUCCESS, 
         # else the user was notified of authentication failure
@@ -72,8 +89,8 @@ def hello(s, line):
             # Creation of a key using the existing rand and an alternate Hash.
             key = Encryptor.run_MD5((password + rand).encode())
             
-            # Creation of a cipher using the new key and the rand_cookie.
-            cipher = Encryptor.Cryptographer(key, rand_cookie.encode())
+            # Permanent Creation of a cipher using the new key and the rand_cookie.
+            cipher = Encryptor.Cryptographer(key, salt.encode())
             
             # Running a test of the new cipher.
             s.sendall(cipher.encrypt("Testing. rand_cookie: " + rand_cookie))

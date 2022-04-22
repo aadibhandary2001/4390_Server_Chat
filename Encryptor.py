@@ -11,6 +11,8 @@
 #############################################################################
 
 # Importations from Cryptodome used for encryption/decryption.
+# Use: "pip install pycryptodomex" if this gives you an error.
+# May require putting the resultant Cryptodome package in the same folder. I don't know why.
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import pad
 from Cryptodome.Random import get_random_bytes
