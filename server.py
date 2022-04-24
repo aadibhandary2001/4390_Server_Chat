@@ -149,14 +149,13 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
             if not data:  # if exit, we break
                 break
             print(newAddr, "Says: ", data)  # print client input
-            newData = data[::-1]  # reverse client input
 
             # connected client tries to log on by sending "HELLO Client-Username"
-            first_word = data.split()[0]
-            if first_word == "HELLO":
+            user_command = data.split()[0]
+            if user_command == "HELLO":
                 handleWelcome(newCon, data)
             else:
-                newCon.sendall(Authenticator.encrypt(newData))  # else, we return values to the client
+                newCon.sendall(Authenticator.encrypt(data))  # else, we return values to the client
 
 
 # Code Below Sets up welcome socket
