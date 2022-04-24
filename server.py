@@ -154,6 +154,9 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
             user_command = data.split()[0]
             if user_command == "HELLO":
                 handleWelcome(newCon, data)
+            elif user_command == "CHAT":
+                new_message = "Eat Shit this feature may not work"
+                newCon.sendall(Authenticator.encrypt(new_message))  # else, we return values to the client
             else:
                 newCon.sendall(Authenticator.encrypt(data))  # else, we return values to the client
 
