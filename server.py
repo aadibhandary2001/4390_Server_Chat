@@ -29,9 +29,15 @@ Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 # Wouldn't be hard to export from the file using str.partition(:) or something similar.
 # The key is the username and the value is the password.
 users = {"dababy": "Apple", "pog": "Banana"}
+active_users={}
+user_con={}
 
+#CHAT Where two users communicate with each other
+def CHAT(conB):
+    chat_request="User wishes to chat"
+    conB.sendall(Authenticator.encrypt(chat_request))
 
-# CHALLENGE (rand) - challenge the client to authenticate itself
+#CHALLENGE (rand) - challenge the client to authenticate itself
 def challenge(newCon, clientID):
     # Asks for password
     greetUser = "User_Exists "
@@ -59,7 +65,7 @@ def challenge(newCon, clientID):
 # AUTH_SUCCESS(rand_cookie, port_number)
 # Notify the client authentication is successful
 # Still need to send the new port # for subsequent connection by client?
-def authSuccess(newCon, rand, salt, clientID):
+def authSuccess(newCon, rand, salt, clientID,client_addr):
     # A message to inform the client of the fact they logged in right.
     auth_Success = "AUTH_SUCCESS "
     
@@ -76,6 +82,13 @@ def authSuccess(newCon, rand, salt, clientID):
     # The rand_cookie is sent with the login success message. Again, need to find a way to
     # send data we don't want the user to see in a clean way.
     auth_Success += rand_cookie
+
+    #Set the user ip to the active user pool
+    active_users[clientID]=client_addr
+    user_con[clientID]=newCon
+
+    print("Address Pair made: ", clientID," at ",active_users.get(clientID))
+    print("Socket Pair made: ", clientID," at ",active_users.get(clientID))
     newCon.sendall(cipher.encrypt(auth_Success))
 
     # Returns variables for possible later use
@@ -91,7 +104,7 @@ def authFail(newCon):
 
 # Receives client's HELLO (Client-ID-A)
 # Handles client authentication and new clients
-def handleWelcome(newCon, data):
+def handleWelcome(newCon, data,client_addr):
     # Client Username
     clientID = data.split()[1]
     
@@ -106,12 +119,12 @@ def handleWelcome(newCon, data):
         
         # Correct password-Equivalent to AUTH_SUCCESS
         if str(Xres) == data:
-            cipher = authSuccess(newCon, rand, salt, clientID)
+            cipher = authSuccess(newCon, rand, salt, clientID,client_addr)
             
             # Running of a test of the new key.
             test_message = cipher.decrypt(newCon.recv(1024))
             print("Says: ", test_message)
-            
+
             test_response = test_message[::-1]
             newCon.sendall(cipher.encrypt(test_response))
         
@@ -153,9 +166,13 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
             # connected client tries to log on by sending "HELLO Client-Username"
             user_command = data.split()[0]
             if user_command == "HELLO":
-                handleWelcome(newCon, data)
+                handleWelcome(newCon, data, newAddr)
             elif user_command == "CHAT":
-                new_message = "Eat Shit this feature may not work"
+                new_message = "Request Sent"
+                user_arg = data.split()[1]
+                print(user_arg)
+                print(user_con.get(user_arg))
+                CHAT(user_con.get(user_arg))
                 newCon.sendall(Authenticator.encrypt(new_message))  # else, we return values to the client
             else:
                 newCon.sendall(Authenticator.encrypt(data))  # else, we return values to the client
@@ -179,6 +196,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         t = threading.Thread(target=handleClient, args=(conn, addr,))  # initialize thread
         t.start()  # start thread
         clients.append(t)  # add thread to thread pool
-
-# 3. Set up message queues
-# 4. Start Threads
