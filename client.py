@@ -11,6 +11,8 @@
 #File Resources and Imports Below
 import socket
 import sys
+import threading
+
 import Encryptor
 
 # Creation of the test Encryptor. All data sent or received passes through this.
@@ -116,17 +118,20 @@ def hello(s, line):
 HOST=socket.gethostbyname(sys.argv[1]) #Get domain name and IP from command line
 PORT=int(sys.argv[2]) #Get port from command line
 
+
+def rcv(conn):
+    data = Authenticator.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
+    print(data)
+    if not data: sys.exit(0)
+    print(f"Received {data!r}")  # Print Received Result
+
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s: #Try to create socket nd define as s
     s.connect((HOST, PORT)) #Connect To Port
     exitTok="EXIT" #Set Exit Token
-    for line in sys.stdin: #Read line inputs from user indefinitely
-        if exitTok == line.rstrip(): #If exitTok, exit for loop
-            break
-        
-        # if client enters empty line, continue to next loop iterration
-        if line == "\n":
-            continue
-                    
+
+    while True:
+        line=input()
+
         # Client tries to log in
         first_word = line.split()[0]
         if first_word == "HELLO":
@@ -136,7 +141,17 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s: #Try to create sock
                 continue
             
             hello(s, line)
+            break;
         else:
-            s.sendall(Authenticator.encrypt(line)) #Encrypt data and send byte stream
-            data = Authenticator.decrypt(s.recv(1024)) #Receive back to a buffer of 1024
-            print(f"Received {data!r}") #Print Received Result
+            print("User must sign in. Please type HELLO (Username)")
+    while True:
+        rcvThread = threading.Thread(target=(rcv), args=(s,))
+        rcvThread.start()
+        line=input()
+        if exitTok == line.rstrip():  # If exitTok, exit for loop
+            break
+
+        # if client enters empty line, continue to next loop iterration
+        if line == "\n":
+            continue
+        s.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
