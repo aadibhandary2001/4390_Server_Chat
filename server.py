@@ -17,6 +17,7 @@ import time # For sleep()
 import socket
 import sys
 import threading
+import pickle
 
 # The code itself works, but it has to have Cryptodome in the same folder as it, and I don't know why.
 import Encryptor
@@ -28,9 +29,33 @@ Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 # A test dictionary of usernames and passwords. In the final version, these should be stored in a file between uses.
 # Wouldn't be hard to export from the file using str.partition(:) or something similar.
 # The key is the username and the value is the password.
-users = {"dababy": "Apple", "pog": "Banana"}
+#users = {"dababy": "Apple", "pog": "Banana"}
+users = dict()
+
+
+# Stores a variable as pickle file
+def pickleStore(mydata, fileName):
+    # Store data
+    with open(fileName, 'wb') as handle:
+        pickle.dump(mydata, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+# Loads data from pickle file into a varaible
+def pickleLoad(fileName):
+    try:
+        # load data
+        with open(fileName, 'rb') as handle:
+            mydata = pickle.load(handle)
+
+        return mydata
+
+     # file doesn't exist
+    except FileNotFoundError:
+        print("ERROR: could not load data from " + fileName)
+        print("\tdata returned/assigned is NoneType")
+
 active_users={}
 user_con={}
+
 
 #CHAT Where two users communicate with each other
 def CHAT(conB):
@@ -143,9 +168,12 @@ def handleWelcome(newCon, data,client_addr):
         # Get client password (client's secretKey)
         data = Authenticator.decrypt(newCon.recv(1024))
         print("Says: ", data)
-        
+
         # Place new user and their password into dictionary users
         users[clientID] = data
+
+        # Stores users dictionary as pickle file
+        pickleStore(users, 'users.pickle')
         
         # Notify client of successful account creation/subscription
         newUserSuccess = "Successful Account Creation/Subscription for User: " + clientID
@@ -186,6 +214,12 @@ PORT = int(sys.argv[1])  # Obtain port from first argument in command line
 print(HostName)  # Print Host Name of Server
 print(HOST)  # Print Host Address of Server
 print(PORT)  # Print Port in use
+
+# Loads data from pickle file into users dictionary
+users = pickleLoad('users.pickle')
+if (users is None): # if pickleLoad returns NoneType (file not exists)
+    users = dict()
+print(users)
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
