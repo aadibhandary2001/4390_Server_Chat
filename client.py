@@ -19,6 +19,15 @@ import Encryptor
 # This should be deleted when the UDP Socket is implemented.
 Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
+global not_exit
+not_exit=True
+
+def rcv(conn):
+    while not_exit:
+        data = Authenticator.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
+        if not data: sys.exit(0)
+        print(f"Received {data!r}")  # Print Received Result
+
 # Response to the challenge by server for authentication
 def response(s, rand, salt):
     # For now at least, the secret keys are passwords input by the users.
@@ -98,7 +107,8 @@ def hello(s, line):
             s.sendall(cipher.encrypt("Testing. rand_cookie: " + rand_cookie))
             test = cipher.decrypt(s.recv(1024))
             print(f"Test result: {test!r}")
-
+            rcvThread = threading.Thread(target=(rcv), args=(s,),daemon=True)
+            rcvThread.start()
     # Client creates new account
     else:
         newPassword = input()
@@ -118,12 +128,6 @@ def hello(s, line):
 HOST=socket.gethostbyname(sys.argv[1]) #Get domain name and IP from command line
 PORT=int(sys.argv[2]) #Get port from command line
 
-
-def rcv(conn):
-    data = Authenticator.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
-    print(data)
-    if not data: sys.exit(0)
-    print(f"Received {data!r}")  # Print Received Result
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s: #Try to create socket nd define as s
     s.connect((HOST, PORT)) #Connect To Port
@@ -145,13 +149,14 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s: #Try to create sock
         else:
             print("User must sign in. Please type HELLO (Username)")
     while True:
-        rcvThread = threading.Thread(target=(rcv), args=(s,))
-        rcvThread.start()
         line=input()
         if exitTok == line.rstrip():  # If exitTok, exit for loop
+            not_exit=False
             break
 
         # if client enters empty line, continue to next loop iterration
         if line == "\n":
             continue
         s.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
+    print("Reached the end!")
+    sys.exit("Goodbye!")
