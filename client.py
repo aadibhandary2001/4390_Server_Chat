@@ -158,5 +158,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s: #Try to create sock
         if line == "\n":
             continue
         s.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
+    s.close()
     print("Reached the end!")
     sys.exit("Goodbye!")
