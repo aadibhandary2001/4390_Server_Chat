@@ -55,12 +55,16 @@ def pickleLoad(fileName):
 
 active_users={}
 user_con={}
-
+con_user={}
 
 #CHAT Where two users communicate with each other
-def CHAT(conB):
-    chat_request="User wishes to chat"
+def CHAT(senderID,conA,conB):
+    chat_request="User "
+    chat_request+=senderID
+    chat_request+=" wishes to chat"
     conB.sendall(Authenticator.encrypt(chat_request))
+    req_sent="Request Sent"
+    conA.sendall(Authenticator.encrypt(req_sent))  # else, we return values to the client
 
 #CHALLENGE (rand) - challenge the client to authenticate itself
 def challenge(newCon, clientID):
@@ -111,6 +115,7 @@ def authSuccess(newCon, rand, salt, clientID,client_addr):
     #Set the user ip to the active user pool
     active_users[clientID]=client_addr
     user_con[clientID]=newCon
+    con_user[newCon]=clientID
 
     print("Address Pair made: ", clientID," at ",active_users.get(clientID))
     print("Socket Pair made: ", clientID," at ",active_users.get(clientID))
@@ -180,7 +185,6 @@ def handleWelcome(newCon, data,client_addr):
         newUserSuccess += "Please try logging into your new account to chat"
         newCon.sendall(Authenticator.encrypt(newUserSuccess))
 
-
 # Utility Functions
 def handleClient(newCon, newAddr):  # Handle client. Threadded function for concurrent client handling
     with newCon:
@@ -196,12 +200,9 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
             if user_command == "HELLO":
                 handleWelcome(newCon, data, newAddr)
             elif user_command == "CHAT":
-                new_message = "Request Sent"
                 user_arg = data.split()[1]
-                print(user_arg)
-                print(user_con.get(user_arg))
-                CHAT(user_con.get(user_arg))
-                newCon.sendall(Authenticator.encrypt(new_message))  # else, we return values to the client
+                CHAT(con_user.get(newCon),newCon,user_con.get(user_arg))
+
             else:
                 newCon.sendall(Authenticator.encrypt(data))  # else, we return values to the client
 
