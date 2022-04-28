@@ -18,7 +18,7 @@ import Encryptor
 
 # Creation of the test Encryptor. All data sent or received passes through this.
 # This should be deleted when the UDP Socket is implemented.
-Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
+# Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
 global not_exit
 not_exit=True
@@ -27,9 +27,9 @@ not_exit=True
 TCP_Sock = None
 user_cipher = None
 
-def rcv(conn):
+def rcv(conn,ciph):
     while not_exit:
-        data = Authenticator.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
+        data = ciph.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
         if not data: sys.exit(0)
         print(f"Received {data!r}")  # Print Received Result
 
@@ -47,15 +47,16 @@ def response(s, serv_addr, username, rand):
 
     # Sending the RES result to compare to the equivalent at the server.
     response = "RESPONSE " + username + " " + str(Encryptor.run_SHA1((password + rand).encode()))
-    RES = Authenticator.encrypt(response)
+    RES = response.encode()
     s.sendto(RES, serv_addr)
     # Receiving the result of the login attempt
     message, addr = s.recvfrom(1024)
-    # Due to Authenticator, this will often post an unwanted "A TCP Connection has ended.
-    challenge_result = Authenticator.decrypt(message)
+    # Making a string version of the message and taking the byte symbol out.
+    # Cannot use decode because if the authentication succeeded, it will contain invalid utf bytes.
+    challenge_result = str(message).replace("b'", "")
     # If the result has Wrong_Password in it as a string, it failed and will print that fact here.
     # The is not None will be removed when the test Authenticator isn't needed anymore.
-    if challenge_result is not None and challenge_result.find('Wrong_Password') >= 0:
+    if challenge_result.find('Wrong_Password') >= 0:
         print(f"Received {challenge_result!r}")
         confirmation = challenge_result
         success_flag = False
@@ -91,9 +92,12 @@ def connect(confirmation, username, password, rand, salt, host_name):
     new_sock.sendall(cipher.encrypt(test_message))
     test = cipher.decrypt(new_sock.recv(1024))
     print(f"Test result: {test!r}")
-    rcvThread = threading.Thread(target=rcv, args=new_sock, daemon=True)
+    global TCP_Sock
+    global user_cipher
+    TCP_Sock = new_sock
+    user_cipher = cipher
+    rcvThread = threading.Thread(target=rcv, args=(new_sock,cipher), daemon=True)
     rcvThread.start()
-    return new_sock, cipher
 
 
 # HELLO (Client-ID-A)
@@ -103,15 +107,19 @@ def hello(s, line, serv_addr):
     # Starts authentication process with server
     client_ID = line.split()[1]
 
-    s.sendto(Authenticator.encrypt(line), serv_addr)
+    s.sendto(line.encode(), serv_addr)
 
     # A flag to say if login was successful.
-    success_flag= False
+    success_flag = False
 
     # Recieves server's welcome message + authentication instructions and rand tuple
     data, addr = s.recvfrom(1024)
-    result = Authenticator.decrypt(data)
-    
+    result = data.decode()
+
+    if result.find("LOGIN_INVALID") >= 0:
+        print(result)
+        return success_flag
+
     # Deserialize string to tuple
     msg_rand_tuple = tuple(map(str, result.split(', ')))
     
@@ -135,11 +143,7 @@ def hello(s, line, serv_addr):
         # else the user was notified of authentication failure
         if success_flag is True:
             # Performing the connection message to end the process of HELLO.
-
-            # We believe that if we uncomment this and make it global, the program will work.
-            # global TCP_Sock
-            # global user_cipher
-            TCP_Sock, user_cipher = connect(confirmation, client_ID , password, rand, salt, serv_addr[0])
+            connect(confirmation, client_ID , password, rand, salt, serv_addr[0])
 
     # Client creates new account
     else:
@@ -150,10 +154,10 @@ def hello(s, line, serv_addr):
             print("Error: the password can't be empty. \nPlease enter a non empty password:")
             newPassword = input()
 
-        s.sendto(Authenticator.encrypt(newPassword), serv_addr)
+        s.sendto(newPassword.encode(), serv_addr)
         
         pass_data, addr = s.recvfrom(1024)
-        pass_result = Authenticator.decrypt(pass_data)
+        pass_result = pass_data.decode()
         print(f"Received {pass_result!r}")
     return success_flag
 
@@ -186,16 +190,20 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u_sock: #Try to create 
                 break
         else:
             print("User must sign in. Please type HELLO (Username)")
-    while True:
-        line = input()
-        if exitTok == line.rstrip():  # If exitTok, exit for loop
-            not_exit=False
-            break
 
-        # if client enters empty line, continue to next loop iterration
-        if line == "\n":
-            continue
-        TCP_Sock.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
-    TCP_Sock.close()
-    print("Reached the end!")
-    sys.exit("Goodbye!")
+while True:
+    line = input()
+    if exitTok == line.rstrip():  # If exitTok, exit for loop
+        not_exit = False
+        break
+
+    # Aadi, you may want to add some sort of flag or check to see if the user's in a Chat.
+    # Gonna leave how to do that one up to you.
+
+    # if client enters empty line, continue to next loop iterration
+    if line == "\n":
+        continue
+    TCP_Sock.sendall(user_cipher.encrypt(line))  # Encrypt data and send byte stream
+TCP_Sock.close()
+print("Reached the end!")
+sys.exit("Goodbye!")
