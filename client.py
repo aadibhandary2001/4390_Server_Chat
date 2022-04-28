@@ -23,6 +23,10 @@ Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 global not_exit
 not_exit=True
 
+# Initiation of the TCP port and cipher
+TCP_Sock = None
+user_cipher = None
+
 def rcv(conn):
     while not_exit:
         data = Authenticator.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
@@ -42,7 +46,7 @@ def response(s, serv_addr, username, rand):
 
 
     # Sending the RES result to compare to the equivalent at the server.
-    response = "RESPONSE " + username + " " + Encryptor.run_SHA1((password + rand).encode())
+    response = "RESPONSE " + username + " " + str(Encryptor.run_SHA1((password + rand).encode()))
     RES = Authenticator.encrypt(response)
     s.sendto(RES, serv_addr)
     # Receiving the result of the login attempt
@@ -70,17 +74,20 @@ def connect(confirmation, username, password, rand, salt, host_name):
     cipher = Encryptor.Cryptographer(key, salt.encode())
     success_message = cipher.decrypt(confirmation)
 
+    login_data = success_message.split()
+
     # Extracting the rand_cookie and TCP Port from the AUTH_SUCCESS
-    rand_cookie = success_message[len(confirmation) - 2]
-    t_port = success_message[len(confirmation) - 1]
+    rand_cookie = login_data[len(login_data) - 2]
+    t_port = int(login_data[len(login_data) - 1])
 
-    new_sock = socket(socket.AF_INET, socket.SOCK_STREAM)
+    new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    new_sock.connect(host_name, t_port)
+    new_sock.connect((host_name, t_port))
+
     # Running a test of the new cipher.
     test_message = "TESTING "
     test_message += username
-    test_message += rand_cookie
+    test_message += (" " + rand_cookie)
     new_sock.sendall(cipher.encrypt(test_message))
     test = cipher.decrypt(new_sock.recv(1024))
     print(f"Test result: {test!r}")
@@ -94,8 +101,13 @@ def connect(confirmation, username, password, rand, salt, host_name):
 def hello(s, line, serv_addr):
     # Creation of the repeatedly used server address tuple for convenience.
     # Starts authentication process with server
+    client_ID = line.split()[1]
+
     s.sendto(Authenticator.encrypt(line), serv_addr)
-    
+
+    # A flag to say if login was successful.
+    success_flag= False
+
     # Recieves server's welcome message + authentication instructions and rand tuple
     data, addr = s.recvfrom(1024)
     result = Authenticator.decrypt(data)
@@ -112,19 +124,22 @@ def hello(s, line, serv_addr):
     print(f"Received {welcomeMsg!r}")
     
     message = welcomeMsg.split()
-    first_word = message[0]
+    server_command = message[0]
     
     # Client is on the list of subscribers
-    if first_word == "User_Exists":
+    if server_command == "User_Exists":
         # Respond to server challenge
-        confirmation, password, success_flag = response(s, rand)
+        confirmation, password, success_flag = response(s, serv_addr, client_ID, rand)
 
         # If AUTH_SUCCESS, 
         # else the user was notified of authentication failure
         if success_flag is True:
             # Performing the connection message to end the process of HELLO.
-            t_sock, cipher = connect(confirmation, password, rand, salt, serv_addr[0])
-            return t_sock, cipher
+
+            # We believe that if we uncomment this and make it global, the program will work.
+            # global TCP_Sock
+            # global user_cipher
+            TCP_Sock, user_cipher = connect(confirmation, client_ID , password, rand, salt, serv_addr[0])
 
     # Client creates new account
     else:
@@ -137,8 +152,10 @@ def hello(s, line, serv_addr):
 
         s.sendto(Authenticator.encrypt(newPassword), serv_addr)
         
-        data, addr = Authenticator.decrypt(s.recvfrom(1024))
-        print(f"Received {data!r}")
+        pass_data, addr = s.recvfrom(1024)
+        pass_result = Authenticator.decrypt(pass_data)
+        print(f"Received {pass_result!r}")
+    return success_flag
 
 
 #1. Connect to Server
@@ -163,9 +180,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u_sock: #Try to create 
                 continue
 
             # If the login was successful, the socket and cipher are returned and usable.
-            t_sock, cipher = hello(u_sock, line, serv_addr)
+            login_success = hello(u_sock, line, serv_addr)
             # Otherwise, this while loop keeps on going.
-            if t_sock is not None:
+            if login_success is True:
                 break
         else:
             print("User must sign in. Please type HELLO (Username)")
@@ -178,7 +195,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u_sock: #Try to create 
         # if client enters empty line, continue to next loop iterration
         if line == "\n":
             continue
-        t_sock.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
-    t_sock.close()
+        TCP_Sock.sendall(Authenticator.encrypt(line))  # Encrypt data and send byte stream
+    TCP_Sock.close()
     print("Reached the end!")
     sys.exit("Goodbye!")
