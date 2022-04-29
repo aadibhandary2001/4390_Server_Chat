@@ -62,22 +62,49 @@ IP_Users = {}
 user_ciph = {}
 user_con = {}
 con_user = {}
-
+user_sess={}
 
 #CHAT Where two users communicate with each other
 def CHAT(senderID, conA, conB):
     # Obtaining the receiver's ID.
     receiverID = con_user.get(conB)
+
     # Getting the needed ciphers based on the client IDs
-    sender_ciph = user_ciph.get(senderID)
-    receiver_ciph = user_ciph.get(receiverID)
+    userA_ciph = user_ciph.get(senderID)
+    userB_ciph = user_ciph.get(receiverID)
+    user_sess[senderID] = True
+
     # Creation and sending of appropriate messages to both clients.
-    chat_request = "User "
+    chat_request = "CHATREQUEST "
     chat_request += senderID
     chat_request += " wishes to chat"
-    conB.sendall(receiver_ciph.encrypt(chat_request))
-    req_sent = "Request Sent"
-    conA.sendall(sender_ciph.encrypt(req_sent))  # else, we return values to the client
+    conB.sendall(userB_ciph.encrypt(chat_request))
+    req_sent = "Request Sent, wait for their response"
+    conA.sendall(userA_ciph.encrypt(req_sent))  # else, we return values to the client
+
+    userB_msg=userB_ciph.decrypt(conB.recv(1024))
+    print(receiverID,"says: ",userB_msg)
+    while True:
+        end_msg = "CHATENDED"
+        if userB_msg == "END":
+            conA.sendall(userA_ciph.encrypt(end_msg))
+            conB.sendall(userB_ciph.encrypt(end_msg))
+            user_sess[senderID]=False
+            user_sess[receiverID]=False
+            break;
+        else:
+            conA.sendall(userA_ciph.encrypt(userB_msg))
+
+        userA_msg=userA_ciph.decrypt(conA.recv(1024))
+        if userA_msg == "END":
+            conB.sendall(userB_ciph.encrypt(end_msg))
+            conA.sendall(userA_ciph.encrypt(end_msg))
+            user_sess[senderID] = False
+            user_sess[receiverID] = False
+            break;
+        else:
+            conB.sendall(userB_ciph.encrypt(userA_msg))
+        userB_msg = userB_ciph.decrypt(conB.recv(1024))
 
 
 def handle_auth(HOST, PORT, t_port):
@@ -243,6 +270,8 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
         active_users[clientID] = newAddr
         user_con[clientID] = newCon
         con_user[newCon] = clientID
+        global user_sess
+        user_sess[clientID]=False
 
         active_cipher = user_ciph.get(clientID)
 
@@ -256,21 +285,26 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
         newCon.sendall(active_cipher.encrypt(test_response))
 
         while True:  # Recieve bytes until client exits
-            data = active_cipher.decrypt(newCon.recv(1024))  # input stream
-            if not data:  # if exit, we break
-                print(newAddr, clientID, "has logged off")
-                break
-            print(newAddr, clientID, " Says: ", data)  # print client input
+            if not user_sess.get(clientID): #if the user is not in an active chat session.
+                print(user_sess.get(clientID))
+                data = active_cipher.decrypt(newCon.recv(1024))  # input stream
+                print(newAddr, clientID, " Says: ", data)  # print client input
+
+                if not data:  # if exit, we break
+                    print(newAddr, clientID, "has logged off")
+                    break
 
             # connected client tries to log on by sending "HELLO Client-Username"
-            user_command = data.split()[0]
+                user_command = data.split()[0]
 
-            if user_command == "CHAT":
-                user_arg = data.split()[1]
-                CHAT(con_user.get(newCon), newCon, user_con.get(user_arg))
-
-            else:
-                newCon.sendall(active_cipher.encrypt(data))  # else, we return values to the client
+                if user_command == "CHAT":
+                    user_arg = data.split()[1]
+                    CHAT(con_user.get(newCon), newCon, user_con.get(user_arg))
+                elif user_command == "CHATACCEPT":
+                    user_sess[clientID]=True
+                    print(user_sess.get(clientID))
+                else:
+                    newCon.sendall(active_cipher.encrypt(data))  # else, we return values to the client
 
 
 # Code Below Sets up welcome socket
