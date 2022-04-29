@@ -20,17 +20,33 @@ import Encryptor
 # This should be deleted when the UDP Socket is implemented.
 # Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
-global not_exit
+#globals for chat
 not_exit=True
+accept_sent=False
 
 # Initiation of the TCP port and cipher
 TCP_Sock = None
 user_cipher = None
 
 def rcv(conn,ciph):
+    chat_accepted="CHATACCEPT"
+    global accept_sent
+
     while not_exit:
         data = ciph.decrypt(conn.recv(1024))  # Receive back to a buffer of 1024
-        if not data: sys.exit(0)
+
+        if not data:
+            sys.exit(0)
+
+        data_splt = data.split()
+        if data_splt[0] == "CHATREQUEST":
+            if not accept_sent:
+                conn.sendall(ciph.encrypt(chat_accepted))
+                accept_sent=True
+                print(accept_sent)
+            print("Chat Session Initiated")
+        if data_splt[0] == "CHATENDED":
+            accept_sent = False
         print(f"Received {data!r}")  # Print Received Result
 
 
