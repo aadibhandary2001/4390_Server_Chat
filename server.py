@@ -18,7 +18,7 @@ import socket
 import sys
 import threading
 import pickle
-
+import os.path
 
 # The code itself works, but it has to have Cryptodome in the same folder as it, and I don't know why.
 import Encryptor
@@ -34,7 +34,6 @@ import Encryptor
 #users = {"dababy": "Apple", "pog": "Banana"}
 users = dict()
 
-
 # Stores a variable as pickle file
 def pickleStore(mydata, fileName):
     # Store data
@@ -48,7 +47,6 @@ def pickleLoad(fileName):
         # load data
         with open(fileName, 'rb') as handle:
             mydata = pickle.load(handle)
-
         return mydata
 
      # file doesn't exist
@@ -64,6 +62,45 @@ user_ciph = {}
 user_con = {}
 con_user = {}
 user_sess={}
+
+def sendHISTORY(file_name, client_conn,client_ciph):
+    print(file_name)
+    history_file=open(file_name)
+    lines=history_file.readlines()
+    for line in lines:
+        sendStr=line.strip()
+        print(sendStr)
+        client_conn.sendall(client_ciph.encrypt(sendStr))
+
+#CHAT history
+def HISTORY(clientAID,clientBID,client_conn):
+    print("history requested")
+    hist_message="history requested"
+    clientCiph=user_ciph.get(clientAID)
+    client_conn.sendall(clientCiph.encrypt(hist_message))
+
+    fileID=clientAID
+    fileID+="-"
+    fileID+=clientBID
+    fileID+=".txt"
+    file_exists=os.path.exists(fileID)
+    print(fileID)
+    if file_exists:
+        print("File does exist")
+        sendHISTORY(fileID, client_conn,clientCiph)
+    else:
+        print("Checking other iteration")
+        fileID=clientBID
+        fileID+="-"
+        fileID+=clientAID
+        fileID +=".txt"
+        file_exists=os.path.exists(fileID)
+        if file_exists:
+            print("File does exist")
+            sendHISTORY(fileID, client_conn,clientCiph)
+        else:
+            print("No such history found")
+
 
 #CHAT Where two users communicate with each other
 def CHAT(senderID, conA, conB):
@@ -127,7 +164,7 @@ def CHAT(senderID, conA, conB):
             conB.sendall(userB_ciph.encrypt(userA_msg))
         userB_msg = userB_ciph.decrypt(conB.recv(1024))
         print(receiverID, "says: ", userB_msg)
-
+    histFile.write("\n")
     histFile.close()
 
 def handle_auth(HOST, PORT, t_port):
@@ -326,6 +363,9 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
                 elif user_command == "CHATACCEPT":
                     user_sess[clientID]=True
                     print(user_sess.get(clientID))
+                elif user_command == "HISTORY_REQ":
+                    user_arg = data.split()[1]
+                    HISTORY(clientID,user_arg,newCon)
                 else:
                     newCon.sendall(active_cipher.encrypt(data))  # else, we return values to the client
 
