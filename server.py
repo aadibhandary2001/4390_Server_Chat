@@ -1,17 +1,18 @@
 ##############################################################################
 #   File:    server.py
-#   Author(s): Aadi Bhandary (CE)
+#   Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE)
 #
 #   Prodcedures:
 #        handleClient:   -reads user requests and messages
-#        handleWelcome:  -checks client is on subscriber list and authenticates them,
+#        handle_auth:    -checks client is on subscriber list and authenticates them,
 #                        -or create new client account/subscription
 #        challenge:      -challenges client to authenticate itself
+#        AuthCheck:      -test out client attempts to login and delegates to authSucces and authFail.
 #        authSuccess:    -notify client that authentication is successful
 #        authFail:       -notify client that authentication has failed
 #
 #############################################################################
-import time # For sleep()
+
 
 # File Resources and Imports Below
 import socket
@@ -19,19 +20,10 @@ import sys
 import threading
 import pickle
 import os.path
-
-# The code itself works, but it has to have Cryptodome in the same folder as it, and I don't know why.
+import time
+# Encryptor is a package made for this project to take care of certain cryptography needs.
 import Encryptor
 
-# Creation of the test Encryptor. All data sent or received passes through this.
-# This should be deleted when the UDP Socket is implemented
-# As a reminder to everyone, especially me, Bryce, remember to remove this very soon.
-# Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
-
-# A test dictionary of usernames and passwords. In the final version, these should be stored in a file between uses.
-# Wouldn't be hard to export from the file using str.partition(:) or something similar.
-# The key is the username and the value is the password.
-#users = {"dababy": "Apple", "pog": "Banana"}
 users = dict()
 
 # Stores a variable as pickle file
@@ -67,10 +59,13 @@ def sendHISTORY(file_name, client_conn,client_ciph):
     print(file_name)
     history_file=open(file_name)
     lines=history_file.readlines()
+    print(lines)
     for line in lines:
         sendStr=line.strip()
         print(sendStr)
         client_conn.sendall(client_ciph.encrypt(sendStr))
+        # Sleeping for a millisecond so that the client doesn't receive multiple messages as if it were one.
+        time.sleep(0.005)
 
 #CHAT history
 def HISTORY(clientAID,clientBID,client_conn):
@@ -87,7 +82,7 @@ def HISTORY(clientAID,clientBID,client_conn):
     print(fileID)
     if file_exists:
         print("File does exist")
-        sendHISTORY(fileID, client_conn,clientCiph)
+        sendHISTORY(fileID, client_conn, clientCiph)
     else:
         print("Checking other iteration")
         fileID=clientBID
@@ -167,6 +162,7 @@ def CHAT(senderID, conA, conB):
     histFile.write("\n")
     histFile.close()
 
+# handle_auth takes care of authentication by making a UDP socket. It exists in its own thread
 def handle_auth(HOST, PORT, t_port):
 
     # Creation of a dictionary to store in-progress logins, rather than risking getting blocked.
@@ -175,26 +171,32 @@ def handle_auth(HOST, PORT, t_port):
         # Binding the UDP Socket to the port number that was entered
         auth_sock.bind((HOST, PORT))
         while True:
+            # Receive messages from a client forever
             message, cli_address = auth_sock.recvfrom(1024)
             str_message = message.decode()
             print(cli_address, "Says", str_message)
+            # Split their request to analyze the parts
             request = str_message.split()
             # Extracting the type of client request.
             request_type = request[0]
             # Extracting the client's username from their request
             client_ID = request[1]
 
+            # Control for login attempts,
             if request_type == "HELLO":
-                # If a user is trying to login from multiple places at once, it soon won't be allowed.
+                # If a user is trying to login from multiple places at once, it won't be allowed.
                 # May want to add another check for this with active users.
                 if client_ID in login_pending:
                     login_exception(auth_sock, cli_address)
+                # If a user is using HELLO with an unknown clientID, they are prompted to make a new one.
                 elif client_ID not in users:
                     make_user(auth_sock, request, cli_address)
+                # Otherwise, this is a valid login with an existing username.
                 else:
                     # Extracting the portions of the message used for the Auth_Success/failure
                     ID, XRES, rand, salt= challenge(auth_sock, cli_address, request)
                     login_pending[ID] = (XRES, rand, salt)
+            # Control for responses to Challenge
             elif request_type == "RESPONSE":
                 # Extracting the client's info to pass to AuthCheck
                 cli_info = login_pending.get(client_ID)
@@ -202,12 +204,17 @@ def handle_auth(HOST, PORT, t_port):
                 AuthCheck(auth_sock, client_ID, cli_info, request, cli_address, t_port)
                 # Whether it succeeded or failed, the client's info will be removed from the pending logins.
                 del login_pending[client_ID]
+            # Control for requests for a new password. Asymmetric encryption isn't included in this build.
+            elif request_type == "NEW_PASS":
+                newPass = request[2]
+                add_pass(auth_sock, client_ID, newPass, cli_address)
+            # Debugging else statement.
             else:
                 error_message = "Unknown UDP request type received."
                 auth_sock.sendto(error_message.encode(), cli_address)
 
 
-# A method to handle the situation whee a user tries to login from multiple clients at once— this is not allowed
+# A method to handle the situation where an end user tries to login from multiple hosts at once— this is not allowed
 def login_exception(auth_sock, cli_addr):
     multiple_log_message = "LOGIN_INVALID: Simultaneous login attempt detected. Please login as a valid user"
     auth_sock.sendto(multiple_log_message.encode(), cli_addr)
@@ -226,23 +233,25 @@ def challenge(auth_sock, dest_addr, clientInfo):
     salt = Encryptor.give_random()
 
     # The sending of the greeting and rand as a tuple
-    # tupple is serialized as a string and must be deserialize by client
+    # tuple is serialized as a string and must be deserialized by client
     greetUser += ", " + rand
     greetUser += ", " + salt
     auth_sock.sendto(greetUser.encode(), dest_addr)
     
     # rand and client's secretKey used in authentication algorithm A3 to output Xres
     Xres = Encryptor.run_SHA1((users[clientID]+rand).encode())
-    print("XRES: " + str(Xres))
+    print("XRES: " + str(Xres).replace(" ", ""))
     
     # Returns Xres, rand, and the salt
-    return clientID, str(Xres), rand, salt
+    # XRES has its spaces removed so that spaces in it don't cause an issue with split.
+    return clientID, str(Xres).replace(" ", ""), rand, salt
 
 
 # AuthCheck, a method to cleanly see if a user is authenticated, and to call the proper message if they were.
 def AuthCheck(auth_sock, cli_ID , cli_info, response, cli_addr,t_port):
+    RES = response[2]
     # If XRES matches RES, run AuthSuccess
-    if cli_info[0] == response[2]:
+    if cli_info[0] == RES:
         authSuccess(auth_sock, cli_info, cli_ID, cli_addr, t_port)
     # Otherwise, run Auth_Fail
     else:
@@ -251,7 +260,6 @@ def AuthCheck(auth_sock, cli_ID , cli_info, response, cli_addr,t_port):
 
 # AUTH_SUCCESS(rand_cookie, port_number)
 # Notify the client authentication is successful
-# Still need to send the new port # for subsequent connection by client?
 def authSuccess(auth_sock, cli_info, clientID, cli_addr, serv_port):
     # Extracting rand and the salt for use.
     rand = cli_info[1]
@@ -282,19 +290,16 @@ def authSuccess(auth_sock, cli_info, clientID, cli_addr, serv_port):
     auth_sock.sendto(cipher.encrypt(auth_Success), cli_addr)
 
 
-
-# Notify the client authentication has failed
+# AUTH_FAIL
+# authFail notifies the client authentication has failed
 def authFail(auth_sock, cli_addr):
     auth_Fail = "Wrong_Password: Please try logging in again with HELLO Client-ID"
     auth_sock.sendto(auth_Fail.encode(), cli_addr)
 
 
-# Handle welcome may have to be broken into chunks in order to handle multiple clients.
-
-# Receives client's HELLO (Client-ID-A)
-# Handles client authentication and new clients
+# make_user is a method to handle new user registration
 def make_user(auth_sock, data, client_addr):
-    # Client Username
+    # Client Username being extracted
     clientID = data[1]
 
     # Ask to create password (client's secretKey)
@@ -303,11 +308,10 @@ def make_user(auth_sock, data, client_addr):
     createPasswordMsg += " Please create a password for the new user: "
     print(createPasswordMsg)
     auth_sock.sendto(createPasswordMsg.encode(), client_addr)
-        
-    # Get client password (client's secretKey)
-    newData, cli_addr = auth_sock.recvfrom(1024)
-    newPass = newData.decode()
-    print(cli_addr, " Says: ", newPass)
+
+
+# add_pass is a method to prepare the new user's password for long-term storage.
+def add_pass(auth_sock, clientID, newPass, client_addr):
 
     # Place new user and their password into dictionary users
     users[clientID] = newPass
