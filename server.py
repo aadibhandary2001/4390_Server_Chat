@@ -19,6 +19,7 @@ import sys
 import threading
 import pickle
 
+
 # The code itself works, but it has to have Cryptodome in the same folder as it, and I don't know why.
 import Encryptor
 
@@ -69,6 +70,13 @@ def CHAT(senderID, conA, conB):
     # Obtaining the receiver's ID.
     receiverID = con_user.get(conB)
 
+    # Store Chat History
+    histFileName = senderID
+    histFileName+="-"
+    histFileName+=receiverID
+    histFileName += ".txt"
+    histFile = open(histFileName, "a")
+
     # Getting the needed ciphers based on the client IDs
     userA_ciph = user_ciph.get(senderID)
     userB_ciph = user_ciph.get(receiverID)
@@ -83,29 +91,44 @@ def CHAT(senderID, conA, conB):
     conA.sendall(userA_ciph.encrypt(req_sent))  # else, we return values to the client
 
     userB_msg=userB_ciph.decrypt(conB.recv(1024))
-    print(receiverID,"says: ",userB_msg)
     while True:
         end_msg = "CHATENDED"
         if userB_msg == "END":
+            print(receiverID," has ended chat")
             conA.sendall(userA_ciph.encrypt(end_msg))
             conB.sendall(userB_ciph.encrypt(end_msg))
             user_sess[senderID]=False
             user_sess[receiverID]=False
             break;
         else:
+            receiverstr = receiverID
+            receiverstr += " says: "
+            receiverstr += userB_msg
+            receiverstr+="\n"
+            print(receiverstr)
+            histFile.write(receiverstr)
             conA.sendall(userA_ciph.encrypt(userB_msg))
 
         userA_msg=userA_ciph.decrypt(conA.recv(1024))
         if userA_msg == "END":
+            print(senderID, " has ended chat")
             conB.sendall(userB_ciph.encrypt(end_msg))
             conA.sendall(userA_ciph.encrypt(end_msg))
             user_sess[senderID] = False
             user_sess[receiverID] = False
             break;
         else:
+            senderstr = senderID
+            senderstr += " says: "
+            senderstr += userA_msg
+            print(senderstr)
+            senderstr += "\n"
+            histFile.write(senderstr)
             conB.sendall(userB_ciph.encrypt(userA_msg))
         userB_msg = userB_ciph.decrypt(conB.recv(1024))
+        print(receiverID, "says: ", userB_msg)
 
+    histFile.close()
 
 def handle_auth(HOST, PORT, t_port):
 
