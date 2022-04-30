@@ -52,14 +52,14 @@ class Cryptographer:
         # Attempt to encrypt a message
         try:
             # Turning the message into bytes
-            byte_message=bytes(str(message), 'utf-8')
+            byte_message=str(message).encode()
             # Returning the original message, encrypted, as a set of bytes.
             return self.cipher.encrypt(pad(byte_message, AES.block_size))
-        # I have no clue what situation a value error could come up in for this side of encryption
+        # A debugging print statement for if encrypt has a value error like decrypt. So far this hasn't happened.
         except ValueError:
-            print("Unknown source of ValueError. I am not sure where this could happen.")
+            print("Unknown source of ValueError detected.")
 
-    # A method to encrypt a received message
+    # A method to decrypt a received message
     def decrypt(self, message):
         # Attempt to read decrypted data
         try:

@@ -1,6 +1,6 @@
 ##############################################################################
 #   File:   client.py
-#   Author(s): Aadi Bhandary (CE)
+#   Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE)
 #
 #   Prodcedures:
 #        response:       -response to the challenge by server for authentication
@@ -15,10 +15,6 @@ import sys
 import threading
 
 import Encryptor
-
-# Creation of the test Encryptor. All data sent or received passes through this.
-# This should be deleted when the UDP Socket is implemented.
-# Authenticator = Encryptor.Cryptographer(b'test_key', b'test_salt')
 
 #globals for chat
 not_exit=True
@@ -62,9 +58,10 @@ def response(s, serv_addr, username, rand):
 
 
     # Sending the RES result to compare to the equivalent at the server.
-    response = "RESPONSE " + username + " " + str(Encryptor.run_SHA1((password + rand).encode()))
-    RES = response.encode()
-    s.sendto(RES, serv_addr)
+    # RES has its spaces removed to prevent spaces from messing with the splitting.
+    RES = str(Encryptor.run_SHA1((password + rand).encode())).replace(" ", "")
+    response = "RESPONSE " + username + " " + RES
+    s.sendto(response.encode(), serv_addr)
     # Receiving the result of the login attempt
     message, addr = s.recvfrom(1024)
     # Making a string version of the message and taking the byte symbol out.
@@ -91,12 +88,12 @@ def connect(confirmation, username, password, rand, salt, host_name):
     cipher = Encryptor.Cryptographer(key, salt.encode())
     success_message = cipher.decrypt(confirmation)
 
+    # Extracting the rand_cookie and TCP Port from the AUTH_SUCCESS
     login_data = success_message.split()
 
-    # Extracting the rand_cookie and TCP Port from the AUTH_SUCCESS
     rand_cookie = login_data[len(login_data) - 2]
     t_port = int(login_data[len(login_data) - 1])
-
+    # Making and connecting the new TCP socket
     new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     new_sock.connect((host_name, t_port))
@@ -119,7 +116,7 @@ def connect(confirmation, username, password, rand, salt, host_name):
 # HELLO (Client-ID-A)
 # Initiates client authentication process and server registration
 def hello(s, line, serv_addr):
-    # Creation of the repeatedly used server address tuple for convenience.
+    # Creation of the repeatedly used client_ID for convenience
     # Starts authentication process with server
     client_ID = line.split()[1]
 
@@ -131,7 +128,7 @@ def hello(s, line, serv_addr):
     # Recieves server's welcome message + authentication instructions and rand tuple
     data, addr = s.recvfrom(1024)
     result = data.decode()
-
+    # If login was invalid due to simultaneous login attempts, it prints that fact.
     if result.find("LOGIN_INVALID") >= 0:
         print(result)
         return success_flag
@@ -140,6 +137,7 @@ def hello(s, line, serv_addr):
     msg_rand_tuple = tuple(map(str, result.split(', ')))
     
     welcomeMsg = msg_rand_tuple[0]
+    # If the user exists, rand and salt are extracted for later use.
     if len(msg_rand_tuple) == 3:
         rand = msg_rand_tuple[1]
         salt = msg_rand_tuple[2]
@@ -163,18 +161,23 @@ def hello(s, line, serv_addr):
 
     # Client creates new account
     else:
+        # Waiting for the client to create a new password.
         newPassword = input()
         
         # if client enters empty line
         while newPassword == '':
             print("Error: the password can't be empty. \nPlease enter a non empty password:")
             newPassword = input()
+        # Sending the message of the new password to the server.
+        # Ideally this would be done with Asymmetric Encryption, but that is not implemented in this build.
+        passMessage = "NEW_PASS "+ client_ID+ " "+newPassword
+        s.sendto(passMessage.encode(), serv_addr)
 
-        s.sendto(newPassword.encode(), serv_addr)
-        
+        # Receiving the server's response to the new password
         pass_data, addr = s.recvfrom(1024)
         pass_result = pass_data.decode()
         print(f"Received {pass_result!r}")
+    # Returning the success flag to say if the for-loop below can break.
     return success_flag
 
 
@@ -199,7 +202,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u_sock: #Try to create 
                 print("Error: ClientID is empty")
                 continue
 
-            # If the login was successful, the socket and cipher are returned and usable.
+            # If the login was successful, login_success will be true.
             login_success = hello(u_sock, line, serv_addr)
             # Otherwise, this while loop keeps on going.
             if login_success is True:
@@ -212,9 +215,6 @@ while True:
     if exitTok == line.rstrip():  # If exitTok, exit for loop
         not_exit = False
         break
-
-    # Aadi, you may want to add some sort of flag or check to see if the user's in a Chat.
-    # Gonna leave how to do that one up to you.
 
     # if client enters empty line, continue to next loop iterration
     if line == "\n":
