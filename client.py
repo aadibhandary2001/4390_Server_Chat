@@ -31,7 +31,7 @@ def timeoutFunc():
     starttime=time.time()
     currtime=time.time()
     global msgsent
-    while (currtime-starttime)<60:
+    while (currtime-starttime)<180:
         if msgsent:
             starttime=time.time()
             msgsent=False
@@ -206,7 +206,7 @@ PORT=int(sys.argv[2]) #Get port from command line
 serv_addr = (HOST, PORT)
 
 exitTok = "EXIT"  # Set Exit Token
-timeoutThread=threading.Thread(target=timeoutFunc,args=())
+timeoutThread=threading.Thread(target=timeoutFunc,args=(), daemon=True)
 timeoutThread.start()
 
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u_sock: #Try to create socket and define as s
