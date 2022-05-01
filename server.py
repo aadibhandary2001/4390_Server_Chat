@@ -7,9 +7,14 @@
 #        handle_auth:    -checks client is on subscriber list and authenticates them,
 #                        -or create new client account/subscription
 #        challenge:      -challenges client to authenticate itself
-#        AuthCheck:      -test out client attempts to login and delegates to authSucces and authFail.
+#        AuthCheck:      -test out client attempts to login and delegates to authSuccess and authFail.
 #        authSuccess:    -notify client that authentication is successful
 #        authFail:       -notify client that authentication has failed
+#        login_exception:-notify client that they cannot login from multiple hosts during the Authentication phase
+#        make_user:      -prompts user to make a new password
+#        add_pass:       -prepares the user's username and password for long term storage
+#        pickleStore:    -stores usernames and passwords as a pickled file
+#        pickleLoad:     -loads usernames and passwords from the pickled file, if they exist.
 #
 #############################################################################
 
@@ -21,6 +26,7 @@ import threading
 import pickle
 import os.path
 import time
+from random import random
 # Encryptor is a package made for this project to take care of certain cryptography needs.
 import Encryptor
 
@@ -61,11 +67,14 @@ def sendHISTORY(file_name, client_conn,client_ciph):
     lines=history_file.readlines()
     print(lines)
     for line in lines:
+        if line == "\n": # Skipping empty lines
+            time.sleep(0.010)
+            continue
         sendStr=line.strip()
         print(sendStr)
         client_conn.sendall(client_ciph.encrypt(sendStr))
-        # Sleeping for a millisecond so that the client doesn't receive multiple messages as if it were one.
-        time.sleep(0.005)
+        # Sleeping for a few milliseconds so that the client doesn't receive multiple messages as if it were one.
+        time.sleep(0.010)
 
 #CHAT history
 def HISTORY(clientAID,clientBID,client_conn):
@@ -119,9 +128,17 @@ def CHAT(senderID, conA, conB):
         histFileName+="-"
         histFileName+=receiverID
         histFileName += ".txt"
-        histFile = open(histFileName, "a")
 
-        # Getting the needed ciphers based on the client IDs
+        alt_histFileName= receiverID
+        alt_histFileName += "-"
+        alt_histFileName += senderID
+        alt_histFileName += ".txt"
+        alt_file_exists = os.path.exists(alt_histFileName) # Checking if the alternate configuration exists.
+        if alt_file_exists:
+            histFile = open(alt_histFileName, "a")         # If the alternate configuration exists, use that one.
+        else:
+            histFile = open(histFileName, "a")             # Otherwise, use the original one.
+
 
         user_sess[senderID] = True
 
@@ -134,6 +151,9 @@ def CHAT(senderID, conA, conB):
         conA.sendall(userA_ciph.encrypt(req_sent))  # else, we return values to the client
 
         userB_msg=userB_ciph.decrypt(conB.recv(1024))
+
+        session_ID_num = int(random()*10000)  # Creation of a random session ID used for chat.
+        session_ID = "Session # "+ str(session_ID_num) + " "
         while True:
             end_msg = "CHATENDED"
             if userB_msg == "END":
@@ -142,9 +162,10 @@ def CHAT(senderID, conA, conB):
                 conB.sendall(userB_ciph.encrypt(end_msg))
                 user_sess[senderID]=False
                 user_sess[receiverID]=False
-                break;
+                break
             else:
-                receiverstr = receiverID
+                receiverstr = session_ID
+                receiverstr += receiverID
                 receiverstr += " says: "
                 receiverstr += userB_msg
                 receiverstr+="\n"
@@ -161,7 +182,8 @@ def CHAT(senderID, conA, conB):
                 user_sess[receiverID] = False
                 break
             else:
-                senderstr = senderID
+                senderstr = session_ID
+                senderstr += senderID
                 senderstr += " says: "
                 senderstr += userA_msg
                 print(senderstr)
