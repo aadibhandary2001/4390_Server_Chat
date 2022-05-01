@@ -12,16 +12,14 @@
 
 # Importations from Cryptodome used for encryption/decryption.
 # Use: "pip install pycryptodomex" if this gives you an error.
-# May require putting the resultant Cryptodome package in the same folder. I don't know why.
+# May require putting the resultant Cryptodome package in the same folder.
 from Cryptodome.Cipher import AES
 from Cryptodome.Util.Padding import pad
 from Cryptodome.Random import get_random_bytes
 from Cryptodome.Util.Padding import unpad
 import hashlib
 
-# Creation of a Cryptographer class that will handle cryptography needs once authentication is complete.
-# Makes use of the PyCryptodome library to take in any arbitrary key input and valid salt to create its
-# encryption.
+
 
 # A function to give 8 random bytes (as a string) to be used for challenges or key generation.
 def give_random():
@@ -39,11 +37,15 @@ def run_MD5(message):
     temp_hash = hashlib.new('md5', message)
     return temp_hash.digest()
 
+
+# Creation of a Cryptographer class that will handle cryptography needs once authentication is complete.
+# Makes use of the PyCryptodome library to take in any arbitrary key input and valid salt to create its
+# encryption.
 class Cryptographer:
     def __init__(self, key, salt):
         # Casting of the key to bytes to ensure that any theoretical key will work
         byte_key= bytes(str(key), 'utf-8')
-        # Creation of the actual cryptography key and subsequent library
+        # Creation of the actual cryptography key and subsequent cipher
         crypt_key = hashlib.pbkdf2_hmac('sha1', byte_key, salt, 3, AES.block_size)
         self.cipher = AES.new(crypt_key, AES.MODE_ECB)
 

@@ -6,6 +6,8 @@
 #        response:       -response to the challenge by server for authentication
 #        hello:          -initiates client authentication process and server registration
 #        connect:        -officially create the TCP connection to the server.
+#        timeoutFunc:    -forces the user to exit the program after 3 minutes of no activity
+#        rcv:            -used in a thread to receive any messages that may come from the server.
 #
 #############################################################################
 
