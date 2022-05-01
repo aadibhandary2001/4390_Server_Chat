@@ -99,68 +99,79 @@ def HISTORY(clientAID,clientBID,client_conn):
 
 #CHAT Where two users communicate with each other
 def CHAT(senderID, conA, conB):
-    # Obtaining the receiver's ID.
-    receiverID = con_user.get(conB)
+    userA_ciph = user_ciph.get(senderID)# Obtaining the sender's Cipher.
+    receiverID = con_user.get(conB)  # Obtaining the receiver's ID.
 
-    # Store Chat History
-    histFileName = senderID
-    histFileName+="-"
-    histFileName+=receiverID
-    histFileName += ".txt"
-    histFile = open(histFileName, "a")
+    isActive=user_sess.get(receiverID)
+    print(isActive)
+    if isActive:
+        busy_msg="Requested User is busy"
+        print(busy_msg)
+        conA.sendall(userA_ciph.encrypt(busy_msg))
+    elif (isActive is None):
+        offline_msg="Requested User is offline"
+        print(offline_msg)
+        conA.sendall(userA_ciph.encrypt(offline_msg))
+    else:
+        userB_ciph = user_ciph.get(receiverID)  # Obtaining the receiver's Cipher.
+        # Store Chat History
+        histFileName = senderID
+        histFileName+="-"
+        histFileName+=receiverID
+        histFileName += ".txt"
+        histFile = open(histFileName, "a")
 
-    # Getting the needed ciphers based on the client IDs
-    userA_ciph = user_ciph.get(senderID)
-    userB_ciph = user_ciph.get(receiverID)
-    user_sess[senderID] = True
+        # Getting the needed ciphers based on the client IDs
 
-    # Creation and sending of appropriate messages to both clients.
-    chat_request = "CHATREQUEST "
-    chat_request += senderID
-    chat_request += " wishes to chat"
-    conB.sendall(userB_ciph.encrypt(chat_request))
-    req_sent = "Request Sent, wait for their response"
-    conA.sendall(userA_ciph.encrypt(req_sent))  # else, we return values to the client
+        user_sess[senderID] = True
 
-    userB_msg=userB_ciph.decrypt(conB.recv(1024))
-    while True:
-        end_msg = "CHATENDED"
-        if userB_msg == "END":
-            print(receiverID," has ended chat")
-            conA.sendall(userA_ciph.encrypt(end_msg))
-            conB.sendall(userB_ciph.encrypt(end_msg))
-            user_sess[senderID]=False
-            user_sess[receiverID]=False
-            break;
-        else:
-            receiverstr = receiverID
-            receiverstr += " says: "
-            receiverstr += userB_msg
-            receiverstr+="\n"
-            print(receiverstr)
-            histFile.write(receiverstr)
-            conA.sendall(userA_ciph.encrypt(userB_msg))
+        # Creation and sending of appropriate messages to both clients.
+        chat_request = "CHATREQUEST "
+        chat_request += senderID
+        chat_request += " wishes to chat"
+        conB.sendall(userB_ciph.encrypt(chat_request))
+        req_sent = "Request Sent, wait for their response"
+        conA.sendall(userA_ciph.encrypt(req_sent))  # else, we return values to the client
 
-        userA_msg=userA_ciph.decrypt(conA.recv(1024))
-        if userA_msg == "END":
-            print(senderID, " has ended chat")
-            conB.sendall(userB_ciph.encrypt(end_msg))
-            conA.sendall(userA_ciph.encrypt(end_msg))
-            user_sess[senderID] = False
-            user_sess[receiverID] = False
-            break;
-        else:
-            senderstr = senderID
-            senderstr += " says: "
-            senderstr += userA_msg
-            print(senderstr)
-            senderstr += "\n"
-            histFile.write(senderstr)
-            conB.sendall(userB_ciph.encrypt(userA_msg))
-        userB_msg = userB_ciph.decrypt(conB.recv(1024))
-        print(receiverID, "says: ", userB_msg)
-    histFile.write("\n")
-    histFile.close()
+        userB_msg=userB_ciph.decrypt(conB.recv(1024))
+        while True:
+            end_msg = "CHATENDED"
+            if userB_msg == "END":
+                print(receiverID," has ended chat")
+                conA.sendall(userA_ciph.encrypt(end_msg))
+                conB.sendall(userB_ciph.encrypt(end_msg))
+                user_sess[senderID]=False
+                user_sess[receiverID]=False
+                break;
+            else:
+                receiverstr = receiverID
+                receiverstr += " says: "
+                receiverstr += userB_msg
+                receiverstr+="\n"
+                print(receiverstr)
+                histFile.write(receiverstr)
+                conA.sendall(userA_ciph.encrypt(userB_msg))
+
+            userA_msg=userA_ciph.decrypt(conA.recv(1024))
+            if userA_msg == "END":
+                print(senderID, " has ended chat")
+                conB.sendall(userB_ciph.encrypt(end_msg))
+                conA.sendall(userA_ciph.encrypt(end_msg))
+                user_sess[senderID] = False
+                user_sess[receiverID] = False
+                break
+            else:
+                senderstr = senderID
+                senderstr += " says: "
+                senderstr += userA_msg
+                print(senderstr)
+                senderstr += "\n"
+                histFile.write(senderstr)
+                conB.sendall(userB_ciph.encrypt(userA_msg))
+            userB_msg = userB_ciph.decrypt(conB.recv(1024))
+            print(receiverID, "says: ", userB_msg)
+        histFile.write("\n")
+        histFile.close()
 
 # handle_auth takes care of authentication by making a UDP socket. It exists in its own thread
 def handle_auth(HOST, PORT, t_port):
