@@ -35,6 +35,8 @@ def timeoutFunc():
         if msgsent:
             starttime=time.time()
             msgsent=False
+        if accept_sent:
+            starttime = time.time()
         currtime=time.time()
     print("Away for too long. Goodbye")
     os._exit(os.EX_OK)
