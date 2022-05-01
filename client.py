@@ -10,20 +10,36 @@
 #############################################################################
 
 #File Resources and Imports Below
+import os
 import socket
 import sys
 import threading
-
+import time
 import Encryptor
 
 #globals for chat
 not_exit=True
 accept_sent=False
+msgsent=False
 
 # Initiation of the TCP port and cipher
 TCP_Sock = None
 user_cipher = None
 
+#function to operate timeout
+def timeoutFunc():
+    starttime=time.time()
+    currtime=time.time()
+    global msgsent
+    while (currtime-starttime)<60:
+        if msgsent:
+            starttime=time.time()
+            msgsent=False
+        currtime=time.time()
+    print("Away for too long. Goodbye")
+    os._exit(os.EX_OK)
+
+#function to operate receive thread
 def rcv(conn,ciph):
     chat_accepted="CHATACCEPT"
     global accept_sent
@@ -188,9 +204,10 @@ PORT=int(sys.argv[2]) #Get port from command line
 serv_addr = (HOST, PORT)
 
 exitTok = "EXIT"  # Set Exit Token
+timeoutThread=threading.Thread(target=timeoutFunc,args=())
+timeoutThread.start()
 
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as u_sock: #Try to create socket and define as s
-
     while True:
         line = input()
 
@@ -219,6 +236,7 @@ while True:
     # if client enters empty line, continue to next loop iterration
     if line == "\n":
         continue
+    msgsent=True
     TCP_Sock.sendall(user_cipher.encrypt(line))  # Encrypt data and send byte stream
 TCP_Sock.close()
 print("Reached the end!")
