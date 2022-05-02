@@ -1,6 +1,6 @@
 ##############################################################################
 #   File:    server.py
-#   Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE)
+#   Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE), David Nguyen (CS), Zach Jackson (SE)
 #
 #   Prodcedures:
 #        handleClient:   -reads user requests and messages
