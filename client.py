@@ -1,6 +1,6 @@
 ##############################################################################
 #   File:   client.py
-#   Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE)
+#    Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE), David Nguyen (CS), Zach Jackson (SE)
 #
 #   Prodcedures:
 #        response:       -response to the challenge by server for authentication
