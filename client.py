@@ -1,6 +1,7 @@
-##############################################################################
+############################################################################################################################
 #   File:   client.py
-#    Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE), David Nguyen (CS), Zach Jackson (SE)
+#   
+#   Author(s): Aadi Bhandary (CE), Bryce McFarlane(CE), David Nguyen (CS), Zach Jackson (SE)
 #
 #   Prodcedures:
 #        response:       -response to the challenge by server for authentication
@@ -9,7 +10,7 @@
 #        timeoutFunc:    -forces the user to exit the program after 3 minutes of no activity
 #        rcv:            -used in a thread to receive any messages that may come from the server.
 #
-#############################################################################
+###########################################################################################################################
 
 #File Resources and Imports Below
 import os
