@@ -388,6 +388,7 @@ def handleClient(newCon, newAddr):  # Handle client. Threadded function for conc
                 print(newAddr, clientID, " Says: ", data)  # print client input
 
                 if not data:  # if exit, we break
+                    user_sess.pop(clientID)#remove from active dictionaries
                     print(newAddr, clientID, "has logged off")
                     break
 
